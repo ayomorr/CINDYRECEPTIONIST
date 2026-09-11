@@ -405,6 +405,49 @@ button{font-family:inherit}
 .typing-dot:nth-child(2){animation-delay:0.15s}
 .typing-dot:nth-child(3){animation-delay:0.3s}
 
+/* Conversation reservation form */
+.reservation-form-wrap{max-width:100%;width:100%}
+.reservation-form{display:flex;flex-direction:column;gap:12px;width:100%}
+.reservation-form-title{font-size:0.92rem;font-weight:600;color:var(--gold);margin-bottom:2px}
+.rf-field{display:flex;flex-direction:column;gap:6px}
+.rf-row{display:flex;gap:10px}
+.rf-row .rf-field{flex:1}
+.rf-label{font-size:0.72rem;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted)}
+.rf-label em{text-transform:none;font-weight:400;letter-spacing:0}
+.reservation-form input{
+  width:100%;padding:10px 12px;border-radius:var(--radius-sm);
+  border:1px solid var(--border);background:rgba(255,255,255,0.04);
+  color:var(--text-primary);font-size:0.88rem;font-family:inherit;
+  transition:var(--transition);
+}
+.reservation-form input:focus{outline:none;border-color:var(--gold);background:rgba(212,165,116,0.06)}
+.rf-submit{
+  padding:12px;border-radius:var(--radius-md);border:none;cursor:pointer;
+  background:linear-gradient(135deg,var(--gold),var(--gold-dark));color:#0F0F1A;
+  font-weight:700;font-size:0.9rem;transition:var(--transition);
+}
+.rf-submit:hover{transform:translateY(-2px);box-shadow:var(--shadow-gold)}
+.rf-submit:disabled{opacity:0.6;cursor:not-allowed;transform:none}
+.rf-status{font-size:0.8rem;color:var(--red);min-height:16px}
+.reservation-success{
+  background:rgba(76,175,80,0.12);border:1px solid rgba(76,175,80,0.3);
+  color:var(--green);border-radius:var(--radius-md);padding:12px 16px;font-size:0.86rem;
+}
+
+/* Conversation AI chat input */
+.conversation-chat-input{display:flex;gap:8px;width:100%;align-self:flex-end}
+.conversation-chat-input input{
+  flex:1;min-width:0;padding:10px 12px;border-radius:var(--radius-sm);
+  border:1px solid var(--border-gold);background:rgba(255,255,255,0.06);
+  color:var(--text-primary);font-size:0.85rem;font-family:inherit;outline:none;
+}
+.conversation-chat-input input:focus{border-color:var(--gold)}
+.conversation-chat-input button{
+  padding:10px 14px;border-radius:var(--radius-sm);border:none;cursor:pointer;
+  background:linear-gradient(135deg,var(--gold),var(--gold-dark));color:#0F0F1A;
+  font-weight:700;font-size:0.82rem;
+}
+
 /* ============================================================================
    DEMO SECTION
    ============================================================================ */
@@ -461,6 +504,24 @@ button{font-family:inherit}
 }
 .demo-end-call:hover{background:rgba(231,76,60,0.25)}
 .demo-actions{text-align:center}
+
+/* Demo call: live transcript + fallback chat input */
+.demo-transcript{
+  font-size:0.78rem;color:var(--text-muted);margin-bottom:12px;
+  max-height:60px;overflow-y:auto;text-align:center;width:100%;
+}
+.demo-input-row{display:none;gap:8px;width:100%;margin-bottom:16px}
+.demo-input-row input{
+  flex:1;min-width:0;padding:10px 12px;border-radius:var(--radius-sm);
+  border:1px solid var(--border-gold);background:rgba(255,255,255,0.06);
+  color:var(--text-primary);font-size:0.85rem;font-family:inherit;outline:none;
+}
+.demo-input-row input:focus{border-color:var(--gold)}
+.demo-input-row button{
+  padding:10px 14px;border-radius:var(--radius-sm);border:none;cursor:pointer;
+  background:linear-gradient(135deg,var(--gold),var(--gold-dark));color:#0F0F1A;
+  font-weight:700;font-size:0.82rem;
+}
 
 /* ============================================================================
    LIVE CONVERSATION

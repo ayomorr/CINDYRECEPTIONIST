@@ -102,6 +102,65 @@ router.post('/orders', (req, res) => {
   });
 });
 
+// POST /api/chat — real AI responses powered by a local Ollama server
+const CINDY_SYSTEM_PROMPT = `You are Cindy, the friendly AI receptionist at Ayomorr Cravings, a restaurant in Lagos, Nigeria.
+Be warm, concise and natural; keep replies to 1-3 short sentences. Never invent menu items, prices, or policies you are unsure about.
+
+Restaurant facts:
+- Cuisine: West African favourites — jollof rice, grilled chicken, suya, pepper soup, fried plantain, salads.
+- Hours: Monday-Thursday 9AM-10PM, Friday 9AM-11PM, Saturday 10AM-11PM, Sunday 10AM-9PM.
+- Reservations: taken for up to 50 guests; events/catering available for 20+ guests.
+- Takeaway: pickup only from the restaurant; delivery is coming soon.
+- Payments: cash, card, and mobile transfers.
+- Location: 123 Food Street, Lagos, Nigeria. Free parking available.
+- Contact: phone 08165795380, email Ayomimore05@gmail.com.
+
+If you don't know the answer, say so honestly and offer to connect the caller with a human team member.`;
+
+router.post('/chat', async (req, res) => {
+  const { message, history = [] } = req.body;
+  if (!message || message.trim().length === 0) {
+    return res.status(400).json({ error: 'Message is required' });
+  }
+
+  const ollamaUrl = process.env.OLLAMA_URL || 'http://localhost:11434';
+  const ollamaModel = process.env.OLLAMA_MODEL || 'llama3.2';
+
+  const messages = [
+    { role: 'system', content: CINDY_SYSTEM_PROMPT },
+    ...history.slice(-8).map(h => ({
+      role: h.sender === 'cindy' ? 'assistant' : 'user',
+      content: h.text
+    })),
+    { role: 'user', content: message }
+  ];
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 20000);
+
+  try {
+    const response = await fetch(`${ollamaUrl}/api/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: ollamaModel, messages, stream: false }),
+      signal: controller.signal
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(`Ollama error: ${response.status}`);
+    }
+    res.json({
+      reply: (data.message && data.message.content) ? data.message.content.trim() : 'Hmm, I lost my train of thought.',
+      model: ollamaModel
+    });
+  } catch (err) {
+    console.error('Ollama chat error:', err.message);
+    res.status(502).json({ error: 'AI assistant unavailable — is Ollama running? Start it with: ollama serve' });
+  } finally {
+    clearTimeout(timeout);
+  }
+});
+
 // GET /api/analytics
 router.get('/analytics', (req, res) => {
   res.json({

@@ -47,10 +47,17 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!a) return;
     const href = a.getAttribute('href');
     if (!href || href === '#') return;
-    const target = $(href);
+
+    const [hashPart, queryPart] = href.split('?');
+    const target = $(hashPart);
     if (target) {
       e.preventDefault();
       target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    const action = new URLSearchParams(queryPart || '').get('action');
+    if (action && target) {
+      setTimeout(() => startCallingAction(action), 350);
     }
   });
 
@@ -153,13 +160,7 @@ document.addEventListener('DOMContentLoaded', () => {
       { sender: 'cindy', text: 'Great choice! That\'s jollof rice with chicken and a side of plantain. What time would you like to pick that up?' },
     ],
     reservation: [
-      { sender: 'cindy', text: 'Hello! I\'d love to help you make a reservation. How many guests will be dining?' },
-      { sender: 'customer', text: 'It\'ll be four of us.' },
-      { sender: 'cindy', text: 'Lovely! And what date and time works best for you?' },
-      { sender: 'customer', text: 'This Saturday at 7:30 PM.' },
-      { sender: 'cindy', text: 'Saturday at 7:30 for four. Could I get your name and phone number, please?' },
-      { sender: 'customer', text: 'My name is Sarah, and my number is 08012345678.' },
-      { sender: 'cindy', text: 'Thank you, Sarah! I\'m checking availability for four guests this Saturday at 7:30 PM.' },
+      { sender: 'cindy', text: 'Hello! I\'d love to help you make a reservation. Please fill in the details below and I\'ll book your table.' },
     ],
     event: [
       { sender: 'cindy', text: 'Hi there! I\'d love to help you plan an event. What kind of event are you thinking of?' },
@@ -169,11 +170,7 @@ document.addEventListener('DOMContentLoaded', () => {
       { sender: 'cindy', text: 'When were you thinking of hosting it? And do you have any preferences for the setup?' },
     ],
     speak: [
-      { sender: 'cindy', text: 'Hi! This is Cindy, the AI receptionist at Ayomorr Cravings. How can I help you today?' },
-      { sender: 'customer', text: 'I just wanted to check if you\'re open tonight.' },
-      { sender: 'cindy', text: 'Yes, we\'re open tonight! Would you like to make a reservation or order something for takeaway?' },
-      { sender: 'customer', text: 'I might just walk in. What\'s the address?' },
-      { sender: 'cindy', text: 'We\'d love to have you! Let me share our location details with you.' },
+      { sender: 'cindy', text: 'Hi! This is Cindy, the AI receptionist at Ayomorr Cravings. Ask me anything — reservations, takeaway orders, the menu, opening hours, directions and more!' },
     ],
     directions: [
       { sender: 'cindy', text: 'I\'d be happy to help you find us! Are you familiar with the area around Ayomorr Cravings?' },
@@ -198,32 +195,198 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
+  function appendMessage(sender, text) {
+    const div = document.createElement('div');
+    div.className = `message ${sender}`;
+    div.textContent = text;
+    conversationMessages.appendChild(div);
+    conversationMessages.scrollTop = conversationMessages.scrollHeight;
+    return div;
+  }
+
+  async function askCindyAI(message, history = []) {
+    const res = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message, history })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'AI assistant unavailable.');
+    return data.reply;
+  }
+
+  let conversationChatHistory = [];
+
+  function addAIConversation() {
+    const wrap = document.createElement('div');
+    wrap.className = 'conversation-chat-input';
+    wrap.innerHTML = `
+      <input type="text" placeholder="Ask Cindy anything…" aria-label="Message Cindy">
+      <button type="button">Send</button>
+    `;
+    conversationMessages.appendChild(wrap);
+    conversationMessages.scrollTop = conversationMessages.scrollHeight;
+
+    const input = wrap.querySelector('input');
+    const sendBtn = wrap.querySelector('button');
+
+    const send = () => {
+      const text = input.value.trim();
+      if (!text) return;
+      input.value = '';
+      appendMessage('customer', text);
+      sendToCindyChat(text);
+    };
+
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') send(); });
+    sendBtn.addEventListener('click', send);
+
+    async function sendToCindyChat(text) {
+      conversationTyping?.classList.add('active');
+      let reply;
+      try {
+        reply = await askCindyAI(text, conversationChatHistory);
+      } catch (err) {
+        reply = replyToCindy(text);
+      }
+      conversationChatHistory.push({ sender: 'customer', text }, { sender: 'cindy', text: reply });
+      conversationTyping?.classList.remove('active');
+      appendMessage('cindy', reply);
+    }
+  }
+
+  function startCallingAction(action) {
+    const card = document.querySelector(`.calling-card[data-action="${action}"]`);
+    callingCards.forEach(c => c.classList.remove('active'));
+    if (card) {
+      card.classList.add('active');
+      card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+    playConversation(action);
+  }
+
   async function playConversation(key) {
     const messages = conversationData[key];
     if (!messages || !conversationMessages) return;
     conversationMessages.innerHTML = '';
+    conversationChatHistory = [];
     callingConversation?.classList.add('active');
 
     for (const msg of messages) {
       conversationTyping?.classList.add('active');
       conversationMessages.scrollTop = conversationMessages.scrollHeight;
-      await sleep(rand(700, 1100));
+      await sleep(rand(600, 900));
       conversationTyping?.classList.remove('active');
-
-      const div = document.createElement('div');
-      div.className = `message ${msg.sender}`;
-      div.textContent = msg.text;
-      conversationMessages.appendChild(div);
-      conversationMessages.scrollTop = conversationMessages.scrollHeight;
-      await sleep(100);
+      appendMessage(msg.sender, msg.text);
+      await sleep(120);
     }
 
-    // Add demo notice
+    if (key === 'reservation') {
+      appendReservationForm();
+    } else if (key === 'speak') {
+      addAIConversation();
+    }
+
     const notice = document.createElement('div');
     notice.className = 'chat-notice';
-    notice.textContent = 'Demo mode — this is a simulated conversation.';
+    notice.textContent = key === 'reservation'
+      ? 'Reservations are saved on the demo backend (in-memory data).'
+      : key === 'speak'
+        ? 'Cindy is powered by your local AI (Ollama) when it is available; otherwise she falls back to scripted replies.'
+        : 'Demo mode — this is a simulated conversation.';
     notice.style.marginTop = '8px';
     conversationMessages.appendChild(notice);
+  }
+
+  function appendReservationForm() {
+    const wrap = document.createElement('div');
+    wrap.className = 'message cindy reservation-form-wrap';
+    wrap.innerHTML = `
+      <form class="reservation-form" novalidate>
+        <h4 class="reservation-form-title">Reserve a Table</h4>
+        <label class="rf-field">
+          <span class="rf-label">Name</span>
+          <input type="text" name="name" placeholder="Your full name" required>
+        </label>
+        <label class="rf-field">
+          <span class="rf-label">Phone</span>
+          <input type="tel" name="phone" placeholder="e.g. 08123456789" required>
+        </label>
+        <div class="rf-row">
+          <label class="rf-field">
+            <span class="rf-label">Guests</span>
+            <input type="number" name="guests" min="1" max="50" value="2" required>
+          </label>
+          <label class="rf-field">
+            <span class="rf-label">Date</span>
+            <input type="date" name="date" required>
+          </label>
+        </div>
+        <label class="rf-field">
+          <span class="rf-label">Time</span>
+          <input type="time" name="time" required>
+        </label>
+        <label class="rf-field">
+          <span class="rf-label">Special requests <em>(optional)</em></span>
+          <input type="text" name="specialRequests" placeholder="Window seat, birthday, etc.">
+        </label>
+        <button type="submit" class="rf-submit">Confirm Reservation</button>
+        <p class="rf-status" role="alert"></p>
+      </form>`;
+    conversationMessages.appendChild(wrap);
+    conversationMessages.scrollTop = conversationMessages.scrollHeight;
+
+    const form = wrap.querySelector('form');
+    const status = wrap.querySelector('.rf-status');
+    const submitBtn = wrap.querySelector('.rf-submit');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const payload = {
+        name: form.elements.name.value.trim(),
+        phone: form.elements.phone.value.trim(),
+        guests: parseInt(form.elements.guests.value, 10) || 2,
+        date: form.elements.date.value,
+        time: form.elements.time.value,
+        specialRequests: form.elements.specialRequests.value.trim(),
+      };
+
+      if (!payload.name || !payload.phone || !payload.date || !payload.time) {
+        status.textContent = 'Please fill in all the required fields.';
+        status.classList.add('error');
+        return;
+      }
+
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Booking your table…';
+      status.textContent = '';
+      status.classList.remove('error');
+
+      try {
+        const res = await fetch('/api/reservations', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Could not save your reservation.');
+
+        form.remove();
+        wrap.classList.remove('message', 'cindy');
+        const success = document.createElement('div');
+        success.className = 'reservation-success';
+        success.textContent = `Table for ${payload.guests} on ${payload.date} at ${payload.time} is reserved. Confirmation ID: ${data.confirmationId}`;
+        wrap.appendChild(success);
+        appendMessage('cindy', `Thank you, ${payload.name}! Your reservation has been confirmed. We look forward to seeing you at Ayomorr Cravings.`);
+      } catch (err) {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Confirm Reservation';
+        status.textContent = err instanceof TypeError
+          ? 'Connection failed — is the server running? Start it with: npm start'
+          : err.message;
+        status.classList.add('error');
+      }
+    });
   }
 
   // ============================================================
@@ -270,20 +433,158 @@ document.addEventListener('DOMContentLoaded', () => {
     }, 1000);
   }
 
+  // ----- Live Demo Call: actually talk to Cindy via the Web Speech API -----
+  const demoListening = $('.demo-listening-indicator');
+  const demoTranscript = $('#demoTranscript');
+  const demoInputRow = $('#demoInputRow');
+  const demoInputField = $('#demoInputField');
+  const demoInputSend = $('#demoInputSend');
+
+  const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const demoRec = SpeechRec ? new SpeechRec() : null;
+  let demoCallActive = false;
+  let demoResponding = false;
+
+  function startDemoListening() {
+    if (!demoCallActive || !demoRec) return;
+    try { demoRec.start(); } catch (e) { /* already running */ }
+    setDemoStatus('Listening…');
+  }
+
+  function stopDemoRecognition() {
+    if (demoRec) { try { demoRec.abort(); } catch (e) {} }
+  }
+
+  function setDemoStatus(text) {
+    if (demoListening) {
+      demoListening.innerHTML = `<span class="listening-dot"></span> ${text}`;
+    }
+  }
+
+  function speakCindy(text) {
+    stopDemoRecognition();
+    if (demoSpeech) {
+      const safe = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+      demoSpeech.innerHTML = `<p>${safe}</p>`;
+    }
+    const finish = () => {
+      demoResponding = false;
+      if (!demoCallActive) return;
+      if (demoRec) {
+        startDemoListening();
+      } else {
+        if (demoInputRow) demoInputRow.style.display = 'flex';
+        setDemoStatus('Type below to talk with Cindy');
+      }
+    };
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(text);
+      u.rate = 1.02;
+      u.pitch = 1.05;
+      u.onend = finish;
+      u.onerror = finish;
+      window.speechSynthesis.speak(u);
+    } else {
+      setTimeout(finish, 800);
+    }
+  }
+
+  function replyToCindy(input) {
+    const t = (input || '').toLowerCase();
+    if (/(reserve|book|table|booking)/.test(t)) return 'I can take care of that! Scroll up and tap the Reservation button, fill in the details, and I will confirm your table right away.';
+    if (/(takeaway|take away|order|deliver)/.test(t)) return 'We offer takeaway pickup. Tap Order Takeaway and tell me what you would like from the menu.';
+    if (/(open|hour|clos)/.test(t)) return 'We are open Monday to Thursday from 9am to 10pm, Friday till 11pm, Saturday from 10am to 11pm, and Sunday from 10am to 9pm.';
+    if (/(menu|food|eat|suggestion|recommend)/.test(t)) return "Tonight's crowd favourites are the jollof rice, grilled chicken, suya, and our fresh salads. What sounds good?";
+    if (/(address|where|direction|location|parking)/.test(t)) return 'We are at 123 Food Street, Lagos, with free parking for our guests.';
+    if (/(event|party|birthday|owambe|cater)/.test(t)) return 'We would love to host your event! Tap Plan an Event and share the details with us.';
+    if (/(pay|payment|card|cash|transfer)/.test(t)) return 'We accept cash, card payments, and mobile transfers.';
+    if (/(thank|thanks)/.test(t)) return 'You are most welcome! Is there anything else I can help you with?';
+    if (/(bye|goodbye|see you)/.test(t)) return 'Thank you for calling Ayomorr Cravings. Have a wonderful day!';
+    return 'I can help you with reservations, takeaway orders, our menu, directions, and events. You can also ask about opening hours or parking.';
+  }
+
+  async function speakCindyAI(input) {
+    let reply;
+    try {
+      reply = await askCindyAI(input);
+    } catch (err) {
+      reply = replyToCindy(input);
+    }
+    speakCindy(reply);
+  }
+
+  function showDemoFallback() {
+    stopDemoRecognition();
+    if (demoInputRow) demoInputRow.style.display = 'flex';
+    if (demoInputField) demoInputField.focus();
+    setDemoStatus('Type below to talk with Cindy');
+  }
+
+  function submitDemoMessage(text) {
+    const v = (text || '').trim();
+    if (!v || !demoCallActive) return;
+    stopDemoRecognition();
+    demoResponding = true;
+    if (demoTranscript) demoTranscript.textContent = `You: "${v}"`;
+    setDemoStatus('Cindy is responding…');
+    setTimeout(() => speakCindyAI(v), 200);
+  }
+
+  if (demoRec) {
+    demoRec.continuous = false;
+    demoRec.interimResults = false;
+    demoRec.lang = 'en-US';
+
+    demoRec.onresult = (e) => {
+      const transcript = Array.from(e.results)
+        .map(r => (r.isFinal ? r[0].transcript : ''))
+        .join('').trim();
+      if (!transcript) return;
+      demoResponding = true;
+      if (demoTranscript) demoTranscript.textContent = `You: "${transcript}"`;
+      setDemoStatus('Cindy is responding…');
+      setTimeout(() => speakCindyAI(transcript), 250);
+    };
+
+    demoRec.onend = () => {
+      if (demoCallActive && !demoResponding) startDemoListening();
+    };
+
+    demoRec.onerror = (e) => {
+      if (e.error && e.error !== 'no-speech' && e.error !== 'aborted') {
+        showDemoFallback();
+      }
+    };
+  }
+
+  demoInputSend?.addEventListener('click', () => submitDemoMessage(demoInputField?.value));
+  demoInputField?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') submitDemoMessage(demoInputField?.value);
+  });
+
   startDemoBtn?.addEventListener('click', () => {
     demoConnected?.classList.add('active');
     startDemoWave();
     startDemoTimer();
     startDemoBtn.style.display = 'none';
+    demoCallActive = true;
+    demoResponding = false;
+    if (demoTranscript) demoTranscript.textContent = '';
+    if (demoInputRow) demoInputRow.style.display = 'none';
+    speakCindy('Welcome to Ayomorr Cravings! How can I help you today?');
   });
 
   endDemoBtn?.addEventListener('click', () => {
+    demoCallActive = false;
+    stopDemoRecognition();
+    if ('speechSynthesis' in window) window.speechSynthesis.cancel();
     demoConnected?.classList.remove('active');
     stopDemoWave();
     clearInterval(demoInterval);
     startDemoBtn.style.display = '';
-    // Reset speech
     if (demoSpeech) demoSpeech.innerHTML = '<p>"Welcome to Ayomorr Cravings! How can I help you today?"</p>';
+    if (demoInputRow) demoInputRow.style.display = 'none';
   });
 
   // Start demo waveform when visible
@@ -437,15 +738,8 @@ document.addEventListener('DOMContentLoaded', () => {
   // ============================================================
   const hash = window.location.hash;
   if (hash.includes('?action=')) {
-    const action = hash.split('?action=')[1];
-    const targetCard = document.querySelector(`.calling-card[data-action="${action}"]`);
-    if (targetCard) {
-      setTimeout(() => {
-        callingCards.forEach(c => c.classList.remove('active'));
-        targetCard.classList.add('active');
-        playConversation(action);
-      }, 400);
-    }
+    const action = new URLSearchParams(hash.split('?')[1] || '').get('action');
+    if (action) setTimeout(() => startCallingAction(action), 400);
   }
 
 });
